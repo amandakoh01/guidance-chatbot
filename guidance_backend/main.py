@@ -6,10 +6,10 @@ from transformers import LlamaTokenizer, LlamaForCausalLM
 import guidance
 import os
 
+import json
+
 from agent import CustomAgentGuidance
 from tools import toolNames, toolDescriptions, toolDict
-
-import time
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
 
@@ -24,7 +24,7 @@ llama = guidance.llms.transformers.Vicuna(model=model, tokenizer=tokenizer)
 guidance.llm = llama
 
 # set up agent with tools
-
+custom_agent = CustomAgentGuidance(guidance, toolDict, toolNames, toolDescriptions)
 
 # FAST API
 app = FastAPI()
@@ -39,37 +39,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def fakeAgent(query):
-    for i in range(5):
-        time.sleep(0.3)
-        yield f"event: stream\ndata: {str(i)}\n\n"
-
-    for i in [" hello ", "how ", "are ", "you?"]:
-        time.sleep(0.3)
-        yield f"event: stream\ndata: {i}\n\n"
-    
-    for i in [" good ", "bye"]:
-        time.sleep(0.3)
-        yield f"event: stream\ndata: {i}\ndata: \ndata: new line\n\n"
-
-    yield "event: final\ndata: this is the final answer\n\n"
-
-    time.sleep(5)
-
-    yield "event: final\ndata: this is the final answer\n\n"
-
-    yield "event: done\ndata: done\n\n"
-
+# SSE endpoint that returns a streamingresponse
 @app.get("/chat")
-async def getResponse(request: Request):
-    custom_agent = CustomAgentGuidance(guidance, toolDict, toolNames, toolDescriptions)
+def getResponse(request: Request):
+    # the query parameters is a list of message, where each message is represented as a dictionary
+    params = json.loads(request.query_params['messages'])
+    print(params)
 
-    print(request)
-    params = eval(request.query_params['messages'])
+    # get question from the parameters
     query = params[-1]['content']
-    print(query)
+    print("Query:", query)
 
-    # we can put the rest of the history into the thing if we want to
+    # can also get history from the parameters, but need to parse it from the list of messages
+    # we can put the rest of the history into the call to the custom agent if we want to
 
     headers = {
         'Cache-Control': 'no-cache',
@@ -77,12 +59,6 @@ async def getResponse(request: Request):
         'Content-Type': 'text/event-stream',
     }
     
-    # return StreamingResponse(
-    #     fakeAgent(query),
-    #     media_type='text/event-stream',
-    #     headers=headers,
-    # )
-
     return StreamingResponse(
         custom_agent(query),
         media_type='text/event-stream',

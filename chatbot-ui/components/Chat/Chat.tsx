@@ -1,4 +1,4 @@
-import { IconClearAll, IconSettings } from '@tabler/icons-react';
+import { IconClearAll } from '@tabler/icons-react';
 import {
   MutableRefObject,
   memo,
@@ -8,11 +8,9 @@ import {
   useRef,
   useState,
 } from 'react';
-import toast from 'react-hot-toast';
 
 import { useTranslation } from 'next-i18next';
 
-import { getEndpoint } from '@/utils/app/api';
 import {
   saveConversation,
   saveConversations,
@@ -20,18 +18,13 @@ import {
 } from '@/utils/app/conversation';
 import { throttle } from '@/utils/data/throttle';
 
-import { ChatBody, Conversation, Message } from '@/types/chat';
+import { Conversation, Message } from '@/types/chat';
 import { Plugin } from '@/types/plugin';
 
 import HomeContext from '@/pages/api/home/home.context';
 
-import Spinner from '../Spinner';
 import { ChatInput } from './ChatInput';
 import { ChatLoader } from './ChatLoader';
-import { ErrorMessageDiv } from './ErrorMessageDiv';
-import { ModelSelect } from './ModelSelect';
-import { SystemPrompt } from './SystemPrompt';
-import { TemperatureSlider } from './Temperature';
 import { MemoizedChatMessage } from './MemoizedChatMessage';
 
 import EventSource from 'eventsource'
@@ -47,14 +40,9 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
     state: {
       selectedConversation,
       conversations,
-      models,
       apiKey,
       pluginKeys,
-      serverSideApiKeyIsSet,
-      messageIsStreaming,
-      modelError,
       loading,
-      prompts,
     },
     handleUpdateConversation,
     dispatch: homeDispatch,
@@ -62,18 +50,12 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
 
   const [currentMessage, setCurrentMessage] = useState<Message>();
   const [autoScrollEnabled, setAutoScrollEnabled] = useState<boolean>(true);
-  const [showSettings, setShowSettings] = useState<boolean>(false);
   const [showScrollDownButton, setShowScrollDownButton] =
     useState<boolean>(false);
-  const [eventSource, setEventSource] = useState<EventSource | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // TODO: cancelling when it's stuck (no new messages r cmg in)
-  // or check timeout??
-  // TODO: [on backend side] catching exceptions in thread... (eg out of memory error)
 
   const handleSend = useCallback(
     async (message: Message, deleteCount = 0, plugin: Plugin | null = null) => {
@@ -131,6 +113,7 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
         let isDone = false;
         homeDispatch({ field: 'thoughts', value: thoughts });
 
+        // when done generating or error occurs (save conversation)
         const doneGenerating = () => {
           isDone = true;
 
@@ -151,6 +134,7 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
           homeDispatch({ field: 'messageIsStreaming', value: false });
         };
 
+        // continuously check if generation should be stopped using timer that calls itself
         const checkStopGeneration = () => {
           if (stopConversationRef.current === true) {
             eventSource.close();
@@ -180,8 +164,10 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
           }
         }
 
+        // run function above
         checkStopGeneration();
 
+        // error listener: close event source and alert
         eventSource.addEventListener('error', function() {
           if (isDone) return;
 
@@ -189,6 +175,7 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
 
           alert("Unable to connect to the server");
 
+          // add "error contacting server" as a message if nothing came through yet
           if (isFirst) {
             homeDispatch({ field: 'loading', value: false });
             isFirst = false;
@@ -214,6 +201,7 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
           console.log("connection open");
         })
 
+        // stream listener (add to sidebar - by dispatching to home)
         eventSource.addEventListener('stream', function(event) {
           thoughts += event.data;
           homeDispatch({ field: 'thoughts', value: thoughts });
@@ -221,6 +209,7 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
           console.log(`stream: '${event.data}'`);
         })
 
+        // final answer listener (adds to both sidebar & main message)
         eventSource.addEventListener('final', function(event) {
           // continue streaming
           thoughts += event.data;
@@ -268,6 +257,7 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
           }
         })
 
+        // done event listener (ends stream and calls the done generating function which saves the convo)
         eventSource.addEventListener('done', function(event) {
           console.log("stream over!!");
           eventSource.close();
@@ -314,10 +304,6 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
     });
   };
 
-  const handleSettings = () => {
-    setShowSettings(!showSettings);
-  };
-
   const onClearAll = () => {
     if (
       confirm(t<string>('Are you sure you want to clear all messages?')) &&
@@ -336,15 +322,6 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
     }
   };
   const throttledScrollDown = throttle(scrollDown, 250);
-
-  // this was not commented out by me
-  // useEffect(() => {
-  //   console.log('currentMessage', currentMessage);
-  //   if (currentMessage) {
-  //     handleSend(currentMessage);
-  //     homeDispatch({ field: 'currentMessage', value: undefined });
-  //   }
-  // }, [currentMessage]);
 
   useEffect(() => {
     throttledScrollDown();
@@ -390,7 +367,7 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
             <>
               <div className="mx-auto flex flex-col space-y-5 md:space-y-10 px-3 pt-5 md:pt-12 sm:max-w-[600px]">
                 <div className="text-center text-3xl font-semibold text-gray-800 dark:text-gray-100">
-                  Chatbot UI
+                  COCO v2
                 </div>
               </div>
             </>
@@ -398,14 +375,6 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
             <>
               <div className="sticky top-0 z-10 flex justify-center border border-b-neutral-300 bg-neutral-100 py-2 text-sm text-neutral-500 dark:border-none dark:bg-[#444654] dark:text-neutral-200">
                 Current conversation: {selectedConversation?.name} | 
-                {/* {t('Model')}: {selectedConversation?.model.name} | {t('Temp')}
-                : {selectedConversation?.temperature} |
-                <button
-                  className="ml-2 cursor-pointer hover:opacity-50"
-                  onClick={handleSettings}
-                >
-                  <IconSettings size={18} />
-                </button> */}
                 <button
                   className="ml-2 cursor-pointer hover:opacity-50"
                   onClick={onClearAll}
@@ -413,14 +382,6 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
                   <IconClearAll size={18} />
                 </button>
               </div>
-              {/* {showSettings && (
-                <div className="flex flex-col space-y-10 md:mx-auto md:max-w-xl md:gap-6 md:py-3 md:pt-6 lg:max-w-2xl lg:px-0 xl:max-w-3xl">
-                  <div className="flex h-full flex-col space-y-4 border-b border-neutral-200 p-4 dark:border-neutral-600 md:rounded-lg md:border">
-                    <ModelSelect />
-                  </div>
-                </div>
-              )} */}
-
               {selectedConversation?.messages.map((message, index) => (
                 <MemoizedChatMessage
                   key={index}

@@ -60,6 +60,6 @@ prompt_final_tool_template = """{{history}}{{select 'tool_name' options=valid_to
 Action Input: {{gen 'actInput' stop='\n'}}
 Observation: {{do_tool tool_name actInput}}
 Thought: {{gen 'thought' stop='\n'}}
-Final Answer: {{select 'end' options=valid_answers}}"""
+Final Answer: """
 
-prompt_final_template = """{{history}}{{gen 'final' stop='\n'}}{{select 'end' options=valid_answers}}"""
+prompt_final_template = """{{history}}{{gen 'final'}}"""
