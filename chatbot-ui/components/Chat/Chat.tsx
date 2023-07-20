@@ -183,6 +183,8 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
         checkStopGeneration();
 
         eventSource.addEventListener('error', function() {
+          if (isDone) return;
+
           eventSource.close();
 
           alert("Unable to connect to the server");

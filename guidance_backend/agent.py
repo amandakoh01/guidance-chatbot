@@ -1,6 +1,7 @@
 from prompts import prompt_start_template_a, prompt_start_template_b, prompt_mid_template, prompt_final_tool_template, prompt_final_template
 
 import time
+import gc
 
 def buildToolListPrompt(toolNames, toolDescriptions):
     final_string = ""
@@ -19,6 +20,7 @@ class CustomAgentGuidance:
         self.valid_tools = toolNames
 
         self.prompt_start_template = prompt_start_template_a + buildToolListPrompt(toolNames, toolDescriptions) + prompt_start_template_b
+        print(self.prompt_start_template)
 
     def do_tool(self, tool_name, actInput):
         return self.toolsDict[tool_name.strip()](actInput)
@@ -28,12 +30,12 @@ class CustomAgentGuidance:
         result = None
         start_idx = self.prompt_start_template.replace("{{question}}", query).find("### Response:") + len("### Response: ")
 
-        prompt_start = self.guidance(self.prompt_start_template)
+        prompt = self.guidance(self.prompt_start_template)
 
-        for p in prompt_start(question=query, valid_answers=self.valid_answers, caching=False, silent=False, stream=True):
+        for p in prompt(question=query, valid_answers=self.valid_answers, caching=False, silent=False, stream=True):
             result = p
             text = str(result)[start_idx:].replace("\n", "\ndata:\ndata:")
-            print(f"'{text}'")
+            print(str(result)[start_idx:], end="")
             yield f"event: stream\ndata: {text}\n\n"
             start_idx = len(str(result))
 
@@ -41,47 +43,52 @@ class CustomAgentGuidance:
             if "Final Answer" in result.get('answer'):
                 break
             history = result.__str__()
-            prompt_mid = self.guidance(prompt_mid_template)
+            prompt = self.guidance(prompt_mid_template)
 
-            for p in prompt_mid(history=history, do_tool=self.do_tool, valid_answers=self.valid_answers, valid_tools=self.valid_tools, caching=False, silent=False, stream=True):
+            for p in prompt(history=history, do_tool=self.do_tool, valid_answers=self.valid_answers, valid_tools=self.valid_tools, caching=False, silent=False, stream=True):
                 result = p
                 text = str(result)[start_idx:].replace("\n", "\ndata:\ndata:")
-                print(f"'{text}'")
+                print(str(result)[start_idx:], end="")
                 yield f"event: stream\ndata: {text}\n\n"
                 start_idx = len(str(result))
+
                                 
         # answer not reached after 2 tool uses: let it use one more tool and then stop
         if "Final Answer" not in result.get('answer'):
             history = result.__str__()
-            prompt_final = self.guidance(prompt_final_tool_template)
+            prompt = self.guidance(prompt_final_tool_template)
 
-            for p in prompt_final(history=history, do_tool=self.do_tool, valid_tools=self.valid_tools, caching=False, silent=False, stream=True):
-                result = p
-                text = str(result)[start_idx:].replace("\n", "\ndata:\ndata:")
-                print(f"'{text}'")
-                yield f"event: stream\ndata: {text}\n\n"
-                start_idx = len(str(result))
+            for p in prompt(history=history, do_tool=self.do_tool, valid_tools=self.valid_tools, valid_answers=['<end>'], caching=False, silent=False, stream=True):
+                if (p.get('end') == None):
+                    result = p
+                    text = str(result)[start_idx:].replace("\n", "\ndata:\ndata:")
+                    print(str(result)[start_idx:], end="")
+                    yield f"event: stream\ndata: {text}\n\n"
+                    start_idx = len(str(result))
             
-        try:
-            # generate the final answer
-            history = result.__str__()
-            prompt_final = self.guidance(prompt_final_template)
+        # generate the final answer
+        history = result.__str__()
+        prompt = self.guidance(prompt_final_template)
 
-            for p in prompt_final(history=history, caching=False, silent=False, stream=True):
+        for p in prompt(history=history, valid_answers=['a, b'], caching=False, silent=False, stream=True):
+            # the end is a hack to get around an error "Event loop stopped before Future completed"
+            # we don't need it in the generation, but without it the error occurs so skip this
+            # might be error in library?
+            if (p.get('end') == None):
                 result = p
                 text = str(result)[start_idx:].replace("\n", "\ndata:\ndata:")
-                print(f"'{text}'")
+                print(str(result)[start_idx:], end="")
                 yield f"event: final\ndata: {text}\n\n"
                 start_idx = len(str(result))
-        except Exception as e:
-            # NOTE: very hacky but i don't know why this error keeps coming up and it only comes up after everything is done so...
-            if "Event loop stopped before Future completed" in str(e):
-                print("Error occurred", e)
-            else:
-                print("Error occured", e)
-                yield f"event: final\ndata: Error occurred on the server\n\n"
 
-        print("done")
+        self.guidance.llms.Transformers.cache.clear()
+        self.guidance.llms.OpenAI.cache.clear()
+
+        del prompt
+        gc.collect()
+
+        # time.sleep(100)
         yield "event: done\ndata: done\n\n"
+        print("done")
 
         return

@@ -24,7 +24,7 @@ llama = guidance.llms.transformers.Vicuna(model=model, tokenizer=tokenizer)
 guidance.llm = llama
 
 # set up agent with tools
-custom_agent = CustomAgentGuidance(guidance, toolDict, toolNames, toolDescriptions)
+
 
 # FAST API
 app = FastAPI()
@@ -39,8 +39,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# TODO: new line requires 2 new lines (formatted as 2 data:s)
-# replace \n with \ndata:\ndata:
 def fakeAgent(query):
     for i in range(5):
         time.sleep(0.3)
@@ -64,6 +62,8 @@ def fakeAgent(query):
 
 @app.get("/chat")
 async def getResponse(request: Request):
+    custom_agent = CustomAgentGuidance(guidance, toolDict, toolNames, toolDescriptions)
+
     print(request)
     params = eval(request.query_params['messages'])
     query = params[-1]['content']
