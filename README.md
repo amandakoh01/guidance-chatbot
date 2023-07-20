@@ -26,3 +26,6 @@ july 20:
 - edited prompt (from 'i don't have all the information' to 'this tool is relevant to the question') to improve performance on general knowledge questions
 - some manual garbage collection to prevent running out of memory after multiple calls
 - add scrollbar to thought bar
+
+july 11:
+- initial commit
