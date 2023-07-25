@@ -19,7 +19,6 @@ class CustomAgentGuidance:
         self.valid_tools = toolNames
 
         self.prompt_start_template = prompt_start_template_a + buildToolListPrompt(toolNames, toolDescriptions) + prompt_start_template_b
-        print(self.prompt_start_template)
 
     # runs the requested tool on the given input
     def do_tool(self, tool_name, actInput):

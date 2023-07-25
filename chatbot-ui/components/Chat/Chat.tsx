@@ -98,10 +98,9 @@ export const Chat = memo(({ stopConversationRef }: Props) => {
 
         // make http request
         const endpoint = 'http://localhost:8000/chat';
-        const params = {messages: JSON.stringify(updatedConversation.messages)};
 
         const url = new URL(endpoint);
-        Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+        url.searchParams.append('messages', JSON.stringify(updatedConversation.messages));
 
         console.log(url.toString());
 

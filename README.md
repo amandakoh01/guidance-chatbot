@@ -12,6 +12,13 @@ backend: `uvicorn main:app --reload --loop asyncio`
 
 frontend: `npm run dev`, then open http://localhost:3000/
 
+### docker containers
+
+backend: `docker run -d --gpus all -v [folder containing model files on host]:/code/app/model -p 8000:8000 chatapibackend`
+(need to let it run for a while to ensure that model is loaded)
+
+frontend: `docker run -d -p 3000:3000 chatapi`
+
 ## todo
 - detect when out of memory error occurs (not as straightforward as a try/except because the exception happens in a thread)
 
@@ -20,6 +27,9 @@ possible extensions:
 - settings to choose which tools are enabled - will need to restructure backend slightly to create new agent based on selected tools
 
 ## history
+
+july 24:
+- dockerised backend and added docker commands to README
 
 july 20:
 - add `--loop asyncio` to run backend code to fix 'event loop stopped before future completed' and 'task was destroyed but it is pending' errors

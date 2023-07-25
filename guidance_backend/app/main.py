@@ -13,15 +13,9 @@ from tools import toolNames, toolDescriptions, toolDict
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:512"
 
-# import model
-modelPath = "LLMModels/vicuna/13B"
-tokenizer = LlamaTokenizer.from_pretrained(modelPath)
-model = LlamaForCausalLM.from_pretrained(modelPath, device_map="auto")
-model.tie_weights()
-
 # set up guidance with model
-llama = guidance.llms.transformers.Vicuna(model=model, tokenizer=tokenizer)
-guidance.llm = llama
+modelPath = "model"
+guidance.llm = guidance.llms.transformers.Vicuna(model=modelPath, device_map="auto")
 
 # set up agent with tools
 custom_agent = CustomAgentGuidance(guidance, toolDict, toolNames, toolDescriptions)
